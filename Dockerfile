@@ -18,12 +18,17 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     net-tools \
     sudo \
+    cron \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Install Node.js 20 LTS ───────────────────────────────────────────
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# ── Install rclone ───────────────────────────────────────────────────
+RUN curl -fsSL https://rclone.org/install.sh | bash
 
 # ── Configure SSH ────────────────────────────────────────────────────
 RUN mkdir /var/run/sshd && \
@@ -42,5 +47,4 @@ RUN chmod +x /etc/profile.d/welcome.sh /start.sh
 
 WORKDIR /home/termuser
 
-# Run as root so sshd can start
 CMD ["/start.sh"]

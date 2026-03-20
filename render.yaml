@@ -9,4 +9,6 @@ services:
       - key: TERM
         value: xterm-256color
       - key: SSH_PASSWORD
-        value: changeme123          # ← CHANGE THIS in Render Dashboard > Environment
+        value: changeme123             # ← CHANGE THIS
+      - key: RCLONE_CONFIG_BASE64
+        value: ""                      # ← Paste your base64 rclone config here (see README)

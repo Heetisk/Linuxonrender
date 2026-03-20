@@ -4,36 +4,67 @@ set -e
 # ── 1. Set SSH password ──────────────────────────────────────────────
 PASSWORD="${SSH_PASSWORD:-changeme123}"
 echo "termuser:${PASSWORD}" | chpasswd
-
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  SSH username : termuser"
 echo "  SSH password : ${PASSWORD}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── 2. Start SSH daemon ──────────────────────────────────────────────
-/usr/sbin/sshd
-echo "✔ SSH server started on port 22"
+# ── 2. Setup rclone config from env var ──────────────────────────────
+if [ -n "$RCLONE_CONFIG_BASE64" ]; then
+    mkdir -p /home/termuser/.config/rclone
+    echo "$RCLONE_CONFIG_BASE64" | base64 -d > /home/termuser/.config/rclone/rclone.conf
+    chown -R termuser:termuser /home/termuser/.config
+    echo "✔ rclone config loaded"
 
-# ── 3. Start localhost.run tunnel ────────────────────────────────────
+    # ── 3. Restore files from Google Drive on startup ────────────────
+    echo "⟳ Restoring files from Google Drive..."
+    sudo -u termuser rclone sync gdrive:terminal-home /home/termuser \
+        --exclude ".config/**" \
+        --log-level INFO 2>&1 || echo "⚠ Restore failed or first run — starting fresh"
+    echo "✔ Restore complete"
+else
+    echo "⚠ RCLONE_CONFIG_BASE64 not set — Google Drive sync disabled"
+    echo "  See README for setup instructions"
+fi
+
+# ── 4. Start SSH daemon ──────────────────────────────────────────────
+/usr/sbin/sshd
+echo "✔ SSH server started"
+
+# ── 5. Auto-sync to Google Drive every 5 minutes ────────────────────
+if [ -n "$RCLONE_CONFIG_BASE64" ]; then
+    (
+        while true; do
+            sleep 300  # every 5 minutes
+            sudo -u termuser rclone sync /home/termuser gdrive:terminal-home \
+                --exclude ".config/**" \
+                --log-level ERROR 2>&1 | grep -v "^$" || true
+            echo "[$(date)] ✔ Synced to Google Drive"
+        done
+    ) &
+    echo "✔ Auto-sync started (every 5 min → gdrive:terminal-home)"
+fi
+
+# ── 6. Start serveo.net SSH tunnel ───────────────────────────────────
 (
-  sleep 3
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Starting SSH tunnel via localhost.run..."
-  echo "  Look for: 'tunneled with tls termination, https://xxxxx.localhost.run'"
-  echo "  Use that hostname + port in PuTTY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  ssh -o StrictHostKeyChecking=no \
-      -o ServerAliveInterval=30 \
-      -o ServerAliveCountMax=3 \
-      -R 22:localhost:22 \
-      nokey@localhost.run 2>&1
+    sleep 3
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Starting SSH tunnel via serveo.net..."
+    echo "  Look for: 'Forwarding TCP connections from tcp://serveo.net:XXXXX'"
+    echo "  In PuTTY: Host=serveo.net  Port=XXXXX"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ssh -o StrictHostKeyChecking=no \
+        -o ServerAliveInterval=30 \
+        -o ServerAliveCountMax=3 \
+        -R 0:localhost:22 \
+        serveo.net 2>&1
 ) &
 
-# ── 4. Start ttyd web terminal ───────────────────────────────────────
+# ── 7. Start ttyd web terminal ───────────────────────────────────────
 echo "✔ Starting web terminal on port ${PORT:-7681}"
 exec ttyd --port "${PORT:-7681}" \
-          --writable \
+          -W \
           --base-path / \
           bash --login
