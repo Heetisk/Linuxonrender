@@ -17,33 +17,48 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     chown -R termuser:termuser /home/termuser/.config
     echo "✔ rclone config loaded"
 
-    # ── 3. Restore files from Google Drive on startup ────────────────
-    echo "⟳ Restoring files from Google Drive..."
+    # ── 3. Restore config files only (skip .local) ───────────────────
+    echo "⟳ Restoring config from Google Drive..."
     sudo -u termuser rclone sync gdrive:terminal-home /home/termuser \
         --exclude ".config/**" \
+        --exclude ".local/**" \
+        --drive-acknowledge-abuse \
         --log-level INFO 2>&1 || echo "⚠ Restore failed or first run — starting fresh"
     echo "✔ Restore complete"
 
-    # ── 4. Unzip openclaw if not already installed ───────────────────
-    if [ ! -f /home/termuser/.local/bin/openclaw ]; then
-        if [ -f /home/termuser/openclaw.zip ]; then
-            echo "⟳ Installing OpenClaw from zip..."
-            mkdir -p /home/termuser/.local/lib/node_modules
-            mkdir -p /home/termuser/.local/bin
-            unzip -q /home/termuser/openclaw.zip -d /home/termuser/.local/lib/node_modules/
-            ln -s /home/termuser/.local/lib/node_modules/openclaw/openclaw.mjs /home/termuser/.local/bin/openclaw
-            chmod +x /home/termuser/.local/bin/openclaw
-            chown -R termuser:termuser /home/termuser/.local
-            echo "✔ OpenClaw installed"
-        else
-            echo "⚠ openclaw.zip not found — skipping install"
-        fi
+    # ── 4. Install OpenClaw from zip ─────────────────────────────────
+    OPENCLAW_MJS="/home/termuser/.local/lib/node_modules/openclaw/openclaw.mjs"
+    OPENCLAW_BIN="/home/termuser/.local/bin/openclaw"
+    OPENCLAW_READY="/home/termuser/.local/lib/node_modules/openclaw/.install-complete"
+
+    if [ ! -f "$OPENCLAW_READY" ]; then
+        echo "⟳ Installing OpenClaw from zip..."
+        # Clean any partial install first
+        rm -rf /home/termuser/.local/lib/node_modules/openclaw
+        sudo -u termuser rclone copyto gdrive:terminal-home/openclaw.zip /home/termuser/openclaw.zip \
+            --drive-acknowledge-abuse 2>&1
+        mkdir -p /home/termuser/.local/lib/node_modules
+        unzip -o -q /home/termuser/openclaw.zip -d /home/termuser/.local/lib/node_modules/
+        rm /home/termuser/openclaw.zip
+        # Mark install complete
+        touch "$OPENCLAW_READY"
+        chown -R termuser:termuser /home/termuser/.local
+        echo "✔ OpenClaw installed from zip"
     else
         echo "✔ OpenClaw already installed"
     fi
 
-    # ── 5. Start openclaw gateway ────────────────────────────────────
-    if [ -f /home/termuser/.local/bin/openclaw ]; then
+    # ── 5. Create symlink if missing ─────────────────────────────────
+    if [ -f "$OPENCLAW_MJS" ] && [ ! -f "$OPENCLAW_BIN" ]; then
+        mkdir -p /home/termuser/.local/bin
+        ln -s "$OPENCLAW_MJS" "$OPENCLAW_BIN"
+        chmod +x "$OPENCLAW_BIN"
+        chown termuser:termuser "$OPENCLAW_BIN"
+        echo "✔ OpenClaw symlink created"
+    fi
+
+    # ── 6. Start openclaw gateway ────────────────────────────────────
+    if [ -f "$OPENCLAW_MJS" ]; then
         echo "⟳ Starting OpenClaw gateway..."
         sudo -u termuser bash -c 'export PATH="$HOME/.local/bin:$PATH"; openclaw gateway' &
         echo "✔ OpenClaw gateway started"
@@ -51,20 +66,21 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
 
 else
     echo "⚠ RCLONE_CONFIG_BASE64 not set — Google Drive sync disabled"
-    echo "  See README for setup instructions"
 fi
 
-# ── 6. Start SSH daemon ──────────────────────────────────────────────
+# ── 7. Start SSH daemon ──────────────────────────────────────────────
 /usr/sbin/sshd
 echo "✔ SSH server started"
 
-# ── 7. Auto-sync to Google Drive every 5 minutes ────────────────────
+# ── 8. Auto-sync to Google Drive every 5 minutes ────────────────────
 if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     (
         while true; do
-            sleep 300  # every 5 minutes
+            sleep 300
             sudo -u termuser rclone sync /home/termuser gdrive:terminal-home \
                 --exclude ".config/**" \
+                --exclude "openclaw.zip" \
+                --drive-acknowledge-abuse \
                 --log-level ERROR 2>&1 | grep -v "^$" || true
             echo "[$(date)] ✔ Synced to Google Drive"
         done
@@ -72,7 +88,7 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     echo "✔ Auto-sync started (every 5 min → gdrive:terminal-home)"
 fi
 
-# ── 8. Start serveo.net SSH tunnel ───────────────────────────────────
+# ── 9. Start serveo.net SSH tunnel ───────────────────────────────────
 (
     sleep 3
     echo ""
@@ -88,7 +104,7 @@ fi
         serveo.net 2>&1
 ) &
 
-# ── 9. Start ttyd web terminal ───────────────────────────────────────
+# ── 10. Start ttyd web terminal ──────────────────────────────────────
 echo "✔ Starting web terminal on port ${PORT:-7681}"
 exec ttyd --port "${PORT:-7681}" \
           -W \
