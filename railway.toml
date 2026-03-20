@@ -1,0 +1,16 @@
+[build]
+dockerfile = "Dockerfile"
+
+[deploy]
+startCommand = "/start.sh"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+
+[[deploy.envVars]]
+name = "TERM"
+value = "xterm-256color"
+
+# Set these in Railway Dashboard → Variables:
+# SSH_PASSWORD       = your_secure_password
+# RCLONE_CONFIG_BASE64 = your_base64_rclone_config
