@@ -2,9 +2,11 @@ services:
   - type: web
     name: linux-terminal
     env: docker
-    plan: free                      # Change to 'starter' for always-on
+    plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
       - key: TERM
         value: xterm-256color
+      - key: SSH_PASSWORD
+        value: changeme123          # ← CHANGE THIS in Render Dashboard > Environment
