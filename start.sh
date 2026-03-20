@@ -33,17 +33,17 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
 
     if [ ! -f "$OPENCLAW_READY" ]; then
         echo "⟳ Installing OpenClaw from zip..."
-        # Clean any partial install first
         rm -rf /home/termuser/.local/lib/node_modules/openclaw
         sudo -u termuser rclone copyto gdrive:terminal-home/openclaw.zip /home/termuser/openclaw.zip \
-            --drive-acknowledge-abuse 2>&1
-        mkdir -p /home/termuser/.local/lib/node_modules
-        unzip -o -q /home/termuser/openclaw.zip -d /home/termuser/.local/lib/node_modules/
-        rm /home/termuser/openclaw.zip
-        # Mark install complete
-        touch "$OPENCLAW_READY"
-        chown -R termuser:termuser /home/termuser/.local
-        echo "✔ OpenClaw installed from zip"
+            --drive-acknowledge-abuse 2>&1 || echo "⚠ Failed to download openclaw.zip"
+        if [ -f /home/termuser/openclaw.zip ]; then
+            mkdir -p /home/termuser/.local/lib/node_modules
+            unzip -o -q /home/termuser/openclaw.zip -d /home/termuser/.local/lib/node_modules/
+            rm /home/termuser/openclaw.zip
+            touch "$OPENCLAW_READY"
+            chown -R termuser:termuser /home/termuser/.local
+            echo "✔ OpenClaw installed from zip"
+        fi
     else
         echo "✔ OpenClaw already installed"
     fi
@@ -57,22 +57,15 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
         echo "✔ OpenClaw symlink created"
     fi
 
-    # ── 6. Start openclaw gateway ────────────────────────────────────
-    if [ -f "$OPENCLAW_MJS" ]; then
-        echo "⟳ Starting OpenClaw gateway..."
-        sudo -u termuser bash -c 'export PATH="$HOME/.local/bin:$PATH"; openclaw gateway' &
-        echo "✔ OpenClaw gateway started"
-    fi
-
 else
     echo "⚠ RCLONE_CONFIG_BASE64 not set — Google Drive sync disabled"
 fi
 
-# ── 7. Start SSH daemon ──────────────────────────────────────────────
+# ── 6. Start SSH daemon ──────────────────────────────────────────────
 /usr/sbin/sshd
 echo "✔ SSH server started"
 
-# ── 8. Auto-sync to Google Drive every 5 minutes ────────────────────
+# ── 7. Auto-sync to Google Drive every 5 minutes ────────────────────
 if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     (
         while true; do
@@ -88,7 +81,7 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     echo "✔ Auto-sync started (every 5 min → gdrive:terminal-home)"
 fi
 
-# ── 9. Start serveo.net SSH tunnel ───────────────────────────────────
+# ── 8. Start serveo.net SSH tunnel ───────────────────────────────────
 (
     sleep 3
     echo ""
@@ -104,7 +97,7 @@ fi
         serveo.net 2>&1
 ) &
 
-# ── 10. Start ttyd web terminal ──────────────────────────────────────
+# ── 9. Start ttyd web terminal ───────────────────────────────────────
 echo "✔ Starting web terminal on port ${PORT:-7681}"
 exec ttyd --port "${PORT:-7681}" \
           -W \
