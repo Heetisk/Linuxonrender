@@ -23,16 +23,42 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
         --exclude ".config/**" \
         --log-level INFO 2>&1 || echo "⚠ Restore failed or first run — starting fresh"
     echo "✔ Restore complete"
+
+    # ── 4. Unzip openclaw if not already installed ───────────────────
+    if [ ! -f /home/termuser/.local/bin/openclaw ]; then
+        if [ -f /home/termuser/openclaw.zip ]; then
+            echo "⟳ Installing OpenClaw from zip..."
+            mkdir -p /home/termuser/.local/lib/node_modules
+            mkdir -p /home/termuser/.local/bin
+            unzip -q /home/termuser/openclaw.zip -d /home/termuser/.local/lib/node_modules/
+            ln -s /home/termuser/.local/lib/node_modules/openclaw/openclaw.mjs /home/termuser/.local/bin/openclaw
+            chmod +x /home/termuser/.local/bin/openclaw
+            chown -R termuser:termuser /home/termuser/.local
+            echo "✔ OpenClaw installed"
+        else
+            echo "⚠ openclaw.zip not found — skipping install"
+        fi
+    else
+        echo "✔ OpenClaw already installed"
+    fi
+
+    # ── 5. Start openclaw gateway ────────────────────────────────────
+    if [ -f /home/termuser/.local/bin/openclaw ]; then
+        echo "⟳ Starting OpenClaw gateway..."
+        sudo -u termuser bash -c 'export PATH="$HOME/.local/bin:$PATH"; openclaw gateway' &
+        echo "✔ OpenClaw gateway started"
+    fi
+
 else
     echo "⚠ RCLONE_CONFIG_BASE64 not set — Google Drive sync disabled"
     echo "  See README for setup instructions"
 fi
 
-# ── 4. Start SSH daemon ──────────────────────────────────────────────
+# ── 6. Start SSH daemon ──────────────────────────────────────────────
 /usr/sbin/sshd
 echo "✔ SSH server started"
 
-# ── 5. Auto-sync to Google Drive every 5 minutes ────────────────────
+# ── 7. Auto-sync to Google Drive every 5 minutes ────────────────────
 if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     (
         while true; do
@@ -46,7 +72,7 @@ if [ -n "$RCLONE_CONFIG_BASE64" ]; then
     echo "✔ Auto-sync started (every 5 min → gdrive:terminal-home)"
 fi
 
-# ── 6. Start serveo.net SSH tunnel ───────────────────────────────────
+# ── 8. Start serveo.net SSH tunnel ───────────────────────────────────
 (
     sleep 3
     echo ""
@@ -62,7 +88,7 @@ fi
         serveo.net 2>&1
 ) &
 
-# ── 7. Start ttyd web terminal ───────────────────────────────────────
+# ── 9. Start ttyd web terminal ───────────────────────────────────────
 echo "✔ Starting web terminal on port ${PORT:-7681}"
 exec ttyd --port "${PORT:-7681}" \
           -W \
