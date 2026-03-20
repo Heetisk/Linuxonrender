@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: linux-terminal
+    env: docker
+    plan: free                      # Change to 'starter' for always-on
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: TERM
+        value: xterm-256color

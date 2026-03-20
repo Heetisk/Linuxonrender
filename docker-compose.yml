@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  linux-terminal:
+    build: .
+    ports:
+      - "7681:7681"
+    environment:
+      - PORT=7681
+      - TERM=xterm-256color
+    restart: unless-stopped
